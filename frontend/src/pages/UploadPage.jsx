@@ -1,30 +1,28 @@
-import React, { startTransition, useState } from "react";
-import { AlertCircle, CheckCircle2, FileSpreadsheet, RefreshCw } from "lucide-react";
-import { commitInventoryUpload, previewInventoryUpload } from "../api";
+import React, { useState } from "react";
+import { commitMonthlyUpload, previewMonthlyUpload } from "../api";
 
-export default function UploadPage({ onNavigate }) {
+export default function UploadPage() {
+  const today = new Date();
+  const [year, setYear] = useState(String(today.getFullYear()));
+  const [month, setMonth] = useState(String(today.getMonth() + 1));
   const [file, setFile] = useState(null);
-  const [year, setYear] = useState("2026");
-  const [month, setMonth] = useState("6");
   const [preview, setPreview] = useState(null);
-  const [replaceExisting, setReplaceExisting] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [committing, setCommitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function handlePreview() {
+  async function handlePreview(event) {
+    event.preventDefault();
     if (!file) {
-      setError("업로드할 xlsx 파일을 먼저 선택해주세요.");
+      setError("업로드할 xlsx 파일을 선택해주세요.");
       return;
     }
     setLoading(true);
     setError("");
     setMessage("");
     try {
-      const data = await previewInventoryUpload({ file, year, month });
-      startTransition(() => setPreview(data));
-      setReplaceExisting(data.summary.should_confirm_replace);
+      const data = await previewMonthlyUpload(file, year, month);
+      setPreview(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -34,175 +32,157 @@ export default function UploadPage({ onNavigate }) {
 
   async function handleCommit() {
     if (!preview) return;
-    setCommitting(true);
+    setLoading(true);
     setError("");
     setMessage("");
     try {
-      const data = await commitInventoryUpload({
-        ...preview.summary,
-        file_name: preview.summary.file_name,
-        source: preview.summary.source,
-        year: preview.summary.year,
-        month: preview.summary.month,
+      const result = await commitMonthlyUpload({
+        file_name: preview.file_name,
+        year: Number(preview.year),
+        month: Number(preview.month),
         rows: preview.rows,
-        errors: preview.errors,
-        replace_existing: replaceExisting,
       });
-      setMessage(`batch #${data.batch_id}로 저장했습니다.`);
-      onNavigate("/uploads");
+      setMessage(`저장 ${result.saved_rows}건, 현재고 조정 ${result.adjusted_rows}건 반영했습니다.`);
     } catch (err) {
       setError(err.message);
     } finally {
-      setCommitting(false);
+      setLoading(false);
     }
+  }
+
+  function updateRow(index, patch) {
+    setPreview((current) => ({
+      ...current,
+      rows: current.rows.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+        const nextRow = { ...row, ...patch };
+        return {
+          ...nextRow,
+          current_stock_diff: nextRow.file_current_stock - nextRow.system_current_stock,
+        };
+      }),
+    }));
   }
 
   return (
     <>
-      <section className="panel upload-hero">
-        <div>
-          <h2>월별 입출고 통계 업로드</h2>
-          <p>필수 컬럼 검증, 상품 매칭, 중복 확인 후 commit 합니다.</p>
-        </div>
-        <div className="upload-controls">
-          <label className="file-picker">
-            <FileSpreadsheet size={18} />
-            <span>{file ? file.name : "xlsx 파일 선택"}</span>
-            <input
-              type="file"
-              accept=".xlsx"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
-            />
-          </label>
-          <input value={year} onChange={(event) => setYear(event.target.value)} placeholder="year" />
-          <input value={month} onChange={(event) => setMonth(event.target.value)} placeholder="month" />
-          <button className="primary-button" disabled={loading} onClick={handlePreview} type="button">
-            {loading ? "미리보기 생성 중..." : "미리보기 생성"}
-          </button>
-        </div>
-      </section>
-
       {error ? <div className="state-message error">{error}</div> : null}
       {message ? <div className="state-message success">{message}</div> : null}
 
+      <form className="panel upload-hero" onSubmit={handlePreview}>
+        <div>
+          <h2>월별 업로드 비교</h2>
+          <p>엑셀 값을 바로 덮어쓰지 않고 시스템 값과 비교한 뒤 반영합니다.</p>
+        </div>
+        <div className="upload-controls">
+          <label className="file-picker">
+            <span>{file ? file.name : "xlsx 선택"}</span>
+            <input type="file" accept=".xlsx" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+          </label>
+          <input value={year} onChange={(event) => setYear(event.target.value)} placeholder="연도" />
+          <input value={month} onChange={(event) => setMonth(event.target.value)} placeholder="월" />
+          <button className="primary-button" type="submit" disabled={loading}>
+            {loading ? "확인 중" : "비교하기"}
+          </button>
+        </div>
+      </form>
+
       {preview ? (
-        <>
-          <section className="metrics-grid">
-            <MetricCard label="총 행 수" value={preview.summary.total_rows} />
-            <MetricCard label="매칭 성공" value={preview.summary.matched_rows} />
-            <MetricCard label="미매칭" value={preview.summary.unmatched_rows} />
-            <MetricCard label="오류" value={preview.summary.error_rows} />
-          </section>
-
-          <section className="panel replace-panel">
+        <section className="panel table-panel">
+          <div className="panel-header">
             <div>
-              <h2>저장 정책</h2>
-              <p>같은 월 committed batch가 있으면 교체 여부를 명시적으로 선택합니다.</p>
+              <h2>업로드 비교 결과</h2>
+              <p>매칭 성공 {preview.matched_rows}건 / 실패 {preview.unmatched_rows}건</p>
             </div>
-            <label className="checkbox-row">
-              <input
-                checked={replaceExisting}
-                onChange={(event) => setReplaceExisting(event.target.checked)}
-                type="checkbox"
-              />
-              <span>기존 committed batch를 rolled_back 처리하고 이번 업로드로 대체</span>
-            </label>
-            <button className="primary-button" disabled={committing} onClick={handleCommit} type="button">
-              {committing ? "저장 중..." : "최종 반영"}
+            <button className="primary-button" type="button" onClick={handleCommit} disabled={loading}>
+              최종 반영
             </button>
-          </section>
-
-          <section className="panel table-panel">
-            <div className="panel-header">
-              <div>
-                <h2>업로드 미리보기</h2>
-                <p>상품코드, 바코드, 상품명 유사도 순으로 매칭했습니다.</p>
-              </div>
-            </div>
-            <div className="table-scroller">
-              <table>
-                <thead>
-                  <tr>
-                    <th>행</th>
-                    <th>상품코드</th>
-                    <th>외부코드</th>
-                    <th>상품명</th>
-                    <th>현재고</th>
-                    <th>입고</th>
-                    <th>출고</th>
-                    <th>매칭</th>
-                    <th>비고</th>
+          </div>
+          <div className="table-scroller">
+            <table>
+              <thead>
+                <tr>
+                  <th>반영</th>
+                  <th>제품</th>
+                  <th>매칭</th>
+                  <th>시스템 현재고</th>
+                  <th>업로드 현재고</th>
+                  <th>차이</th>
+                  <th>현재고 조정</th>
+                  <th>입고</th>
+                  <th>출고</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.rows.map((row, index) => (
+                  <tr key={`${row.row_number}-${row.product_code || row.name}`}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={row.selected}
+                        onChange={(event) => updateRow(index, { selected: event.target.checked })}
+                      />
+                    </td>
+                    <td>
+                      <div className="cell-title">
+                        <strong>{row.name}</strong>
+                        <span>
+                          {row.product_code || "-"} / {row.legacy_code || "-"}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`badge ${row.matched ? "matched" : "danger"}`}>
+                        {row.matched ? "매칭" : "미매칭"}
+                      </span>
+                    </td>
+                    <td className="number">{row.system_current_stock.toLocaleString()}</td>
+                    <td>
+                      <input
+                        className="table-input number"
+                        value={row.file_current_stock}
+                        onChange={(event) => updateRow(index, { file_current_stock: Number(event.target.value || 0) })}
+                      />
+                    </td>
+                    <td className={`number ${row.current_stock_diff !== 0 ? "danger" : ""}`}>
+                      {row.current_stock_diff.toLocaleString()}
+                    </td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={row.apply_stock_adjustment}
+                        onChange={(event) => updateRow(index, { apply_stock_adjustment: event.target.checked })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="table-input number"
+                        value={row.inbound_quantity}
+                        onChange={(event) => updateRow(index, { inbound_quantity: Number(event.target.value || 0) })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="table-input number"
+                        value={row.outbound_quantity}
+                        onChange={(event) => updateRow(index, { outbound_quantity: Number(event.target.value || 0) })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="table-input"
+                        value={row.note || ""}
+                        onChange={(event) => updateRow(index, { note: event.target.value })}
+                      />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {preview.rows.map((row) => (
-                    <tr key={row.row_number}>
-                      <td>{row.row_number}</td>
-                      <td>{row.product_code || "-"}</td>
-                      <td>{row.external_code || "-"}</td>
-                      <td>{row.product_name}</td>
-                      <td className="number">{formatNumber(row.current_stock)}</td>
-                      <td className="number">{formatNumber(row.inbound_quantity)}</td>
-                      <td className="number">{formatNumber(row.outbound_quantity)}</td>
-                      <td>
-                        {row.matched ? (
-                          <span className="badge matched">
-                            <CheckCircle2 size={14} />
-                            {row.match_method}
-                          </span>
-                        ) : (
-                          <span className="badge warning">
-                            <AlertCircle size={14} />
-                            신규
-                          </span>
-                        )}
-                      </td>
-                      <td>{row.is_duplicate ? row.duplicate_reason : "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          {preview.errors.length ? (
-            <section className="panel table-panel">
-              <div className="panel-header">
-                <div>
-                  <h2>검증 오류</h2>
-                  <p>필수 컬럼 누락이나 값 이상 행입니다.</p>
-                </div>
-              </div>
-              <div className="error-list">
-                {preview.errors.map((item) => (
-                  <div className="error-card" key={`${item.row_number}-${item.error_message}`}>
-                    <strong>{item.row_number}행</strong>
-                    <span>{item.error_message}</span>
-                  </div>
                 ))}
-              </div>
-            </section>
-          ) : null}
-        </>
-      ) : (
-        <section className="empty-state">
-          <RefreshCw size={18} />
-          <p>파일을 올리면 미리보기와 매칭 결과가 여기 표시됩니다.</p>
+              </tbody>
+            </table>
+          </div>
         </section>
-      )}
+      ) : null}
     </>
   );
-}
-
-function MetricCard({ label, value }) {
-  return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{formatNumber(value)}</strong>
-    </article>
-  );
-}
-
-function formatNumber(value) {
-  return Number(value || 0).toLocaleString();
 }

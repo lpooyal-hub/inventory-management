@@ -56,6 +56,7 @@ body {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
 }
@@ -65,6 +66,7 @@ button {
 }
 
 input,
+textarea,
 select,
 button {
   border: 1px solid var(--border);
@@ -284,8 +286,64 @@ h2 {
   padding: 18px;
 }
 
+.dual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.dual-grid.wide-right {
+  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+}
+
+.stack-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.form-panel {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.form-panel label {
+  display: grid;
+  gap: 6px;
+}
+
+.form-panel label span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.form-panel input,
+.form-panel select,
+.form-panel textarea {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  color: inherit;
+}
+
+.form-panel textarea {
+  min-height: 96px;
+  padding: 12px;
+  resize: vertical;
+}
+
 .toolbar-panel {
   grid-template-columns: minmax(240px, 1fr) 160px 140px;
+}
+
+.wide-toolbar {
+  grid-template-columns: minmax(240px, 1fr) 120px 120px 120px;
+}
+
+.monthly-toolbar {
+  grid-template-columns: 120px 120px minmax(220px, 1fr) 140px 140px;
 }
 
 .search-field {
@@ -300,6 +358,7 @@ h2 {
 }
 
 .search-field input,
+.toolbar-panel input,
 .toolbar-panel select,
 .upload-controls input {
   width: 100%;
@@ -325,7 +384,7 @@ h2 {
 
 .upload-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px 84px 132px;
+  grid-template-columns: minmax(0, 1fr) 132px 132px;
   gap: 10px;
 }
 
@@ -360,6 +419,32 @@ h2 {
 
 .table-panel {
   padding: 18px;
+}
+
+.list-panel {
+  display: grid;
+  gap: 10px;
+  max-height: 720px;
+  overflow: auto;
+}
+
+.list-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--panel-strong);
+  color: inherit;
+}
+
+.list-row.active {
+  border-color: rgba(184, 92, 56, 0.38);
+  background: var(--brand-soft);
+}
+
+.list-row span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .table-scroller {
@@ -433,11 +518,81 @@ tbody tr:hover {
   background: rgba(117, 100, 86, 0.12);
 }
 
+.secondary-button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  min-width: 74px;
+  justify-content: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(117, 100, 86, 0.12);
+  color: var(--muted);
+}
+
+.status-dot.normal {
+  background: rgba(47, 125, 99, 0.12);
+  color: var(--success);
+}
+
+.status-dot.warning {
+  background: rgba(155, 106, 23, 0.12);
+  color: var(--warning);
+}
+
+.status-dot.critical {
+  background: rgba(180, 67, 67, 0.16);
+  color: var(--danger);
+}
+
+.cell-title {
+  display: grid;
+  gap: 4px;
+}
+
+.cell-title span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .checkbox-row {
   display: flex;
   gap: 10px;
   align-items: center;
   color: var(--text);
+}
+
+.triple-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.table-input {
+  width: 100%;
+  min-width: 96px;
+  min-height: 36px;
+  padding: 0 10px;
+  background: var(--panel-strong);
+  color: inherit;
 }
 
 .state-message,
@@ -496,7 +651,12 @@ tbody tr:hover {
   .metrics-grid,
   .upload-hero,
   .upload-controls,
-  .toolbar-panel {
+  .toolbar-panel,
+  .wide-toolbar,
+  .monthly-toolbar,
+  .dual-grid,
+  .dual-grid.wide-right,
+  .triple-grid {
     grid-template-columns: 1fr;
   }
 }

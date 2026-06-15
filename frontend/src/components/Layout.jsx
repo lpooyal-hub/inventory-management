@@ -9,14 +9,24 @@ export default function Layout({
   themeIcon,
   children,
 }) {
+  const titleMap = {
+    "/inventory": "재고현황",
+    "/products": "제품 관리",
+    "/movements": "일일 출고 입력",
+    "/uploads/monthly": "월별 통계/업로드",
+    "/monthly-data": "월별 데이터 수정",
+    "/reports/monthly": "월별 통계/업로드",
+    "/reports/shortage": "부족 재고 리포트",
+  };
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <button className="brand" onClick={() => onNavigate("/inventory")} type="button">
           <span className="brand-mark">IM</span>
           <span className="brand-copy">
-            <strong>Inventory Flow</strong>
-            <small>small business stock desk</small>
+            <strong>Inventory MVP</strong>
+            <small>daily outbound first</small>
           </span>
         </button>
 
@@ -39,22 +49,16 @@ export default function Layout({
         </nav>
 
         <div className="sidebar-note">
-          <p>월별 업로드는 바로 반영되지 않습니다.</p>
-          <strong>미리보기 확인 후 commit</strong>
+          <p>부족 상태가 보이면 바로 생산주문 후보입니다.</p>
+          <strong>빨간불 = 우선 확인</strong>
         </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Web Inventory System</p>
-            <h1>
-              {pathname === "/inventory/upload"
-                ? "월별 입출고 업로드"
-                : pathname === "/uploads"
-                  ? "업로드 이력"
-                  : "종합 재고현황"}
-            </h1>
+            <p className="eyebrow">Simple Inventory Operations</p>
+            <h1>{titleMap[pathname] || "재고현황"}</h1>
           </div>
           <button className="theme-toggle" onClick={onToggleTheme} type="button">
             {themeIcon}

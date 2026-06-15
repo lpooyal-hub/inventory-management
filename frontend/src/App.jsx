@@ -1,20 +1,25 @@
 import React, { startTransition, useEffect, useState } from "react";
-import { Archive, FileUp, Layers3, MoonStar, SunMedium } from "lucide-react";
+import { ClipboardMinus, Database, FileSpreadsheet, MoonStar, Package2, ReceiptText, Settings2, SunMedium } from "lucide-react";
 import Layout from "./components/Layout";
 import InventoryPage from "./pages/InventoryPage";
-import UploadPage from "./pages/UploadPage";
-import UploadHistoryPage from "./pages/UploadHistoryPage";
+import MonthlyDataPage from "./pages/MonthlyDataPage";
+import MovementPage from "./pages/MovementPage";
+import MonthlyReportPage from "./pages/MonthlyReportPage";
+import ProductsPage from "./pages/ProductsPage";
+import ShortageReportPage from "./pages/ShortageReportPage";
 
 const navItems = [
-  { path: "/inventory", label: "재고현황", icon: Layers3 },
-  { path: "/inventory/upload", label: "엑셀 업로드", icon: FileUp },
-  { path: "/uploads", label: "업로드 이력", icon: Archive },
+  { path: "/inventory", label: "재고현황", icon: Package2 },
+  { path: "/products", label: "제품 관리", icon: Settings2 },
+  { path: "/movements", label: "일일 출고 입력", icon: ClipboardMinus },
+  { path: "/reports/monthly", label: "월별 통계/업로드", icon: FileSpreadsheet },
+  { path: "/monthly-data", label: "월별 데이터 수정", icon: Database },
+  { path: "/reports/shortage", label: "부족 재고 리포트", icon: ReceiptText },
 ];
 
 function getPathname() {
   const path = window.location.pathname;
-  if (path === "/") return "/inventory";
-  return path;
+  return path === "/" ? "/inventory" : path;
 }
 
 export default function App() {
@@ -42,11 +47,12 @@ export default function App() {
   }
 
   let content = <InventoryPage />;
-  if (pathname === "/inventory/upload") {
-    content = <UploadPage onNavigate={navigate} />;
-  } else if (pathname === "/uploads") {
-    content = <UploadHistoryPage />;
-  }
+  if (pathname === "/products") content = <ProductsPage />;
+  if (pathname === "/movements") content = <MovementPage />;
+  if (pathname === "/uploads/monthly") content = <MonthlyReportPage />;
+  if (pathname === "/monthly-data") content = <MonthlyDataPage />;
+  if (pathname === "/reports/monthly") content = <MonthlyReportPage />;
+  if (pathname === "/reports/shortage") content = <ShortageReportPage />;
 
   return (
     <Layout

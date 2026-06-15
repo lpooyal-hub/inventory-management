@@ -1,124 +1,163 @@
-# Inventory Management
+# Inventory Management MVP
 
-Excel inventory status migration target for a small-business web inventory system.
+형님 요청 기준으로 복잡한 ERP 대신, 매일 출고 기록과 월별 파일 업로드를 함께 쓰는 재고관리 MVP입니다.
 
-## Planned Structure
+## MVP 목표
+
+1. 보유 재고에서 매일 입고/출고/실재고 조정 기록을 남긴다.
+2. 제품별 월 출고량을 월별 통계 페이지에서 관리한다.
+3. 최근 3개월 월 평균 출고량을 재고현황과 바로 연동한다.
+4. 현재고가 평균 대비 부족한 제품을 바로 확인한다.
+5. 부족 상태인 제품은 생산주문 필요 대상으로 본다.
+
+## 프로젝트 구조
 
 ```text
 inventory-management/
   backend/
     app/
       core/
-        config.py
       db/
-        base.py
-        session.py
       models/
-        inventory_snapshot.py
-        product.py
-        stock_movement.py
-        upload.py
-        material.py
+      routers/
+      schemas/
+      services/
       main.py
-    requirements.txt
   frontend/
     src/
       components/
-      layouts/
       pages/
-      services/
-      types/
+      api.js
+      App.jsx
 ```
 
-## Excel Notes
+## 핵심 DB
 
-- `2026` sheet: product inventory with product name, code, current stock, inbound quantity, total outbound quantity, and daily outbound columns.
-- `입고체크` sheet: inbound check list with product name, order date, inbound date, quantity, and memo-like notes.
-- `부자재 재고현황` sheets: material inventory with item name, type, current stock, standard stock, vendor, unit price, and memo.
-- `제품생산 체크리스트` sheet: production/order check list with product name, order status/date, order quantity, and memo.
-- `월별 입출고 통계(합계) 리스트` sheet: external monthly inventory statistics. Header is row 1 and contains the required upload columns.
+### products
 
-The application model stores stock as movements instead of directly editing product stock.
+- `id`
+- `product_code`
+- `name`
+- `barcode`
+- `memo`
+- `created_at`
+- `updated_at`
 
-## Proposed Import Columns
+### stock_movements
 
-### Product Inventory
+- `id`
+- `product_id`
+- `movement_date`
+- `movement_type`
+- `quantity`
+- `memo`
+- `created_at`
 
-| Excel column | Suggested field | Note |
-| --- | --- | --- |
-| 품명 (규격/색상) | product.name | Required |
-| 코드 | product.code | Optional and changeable |
-| 실재고 | calculated/current stock preview | Used to create initial adjustment if confirmed |
-| 입고 | inbound movement quantity | Optional |
-| 총출하량 | outbound total preview | Optional |
-| 1~31 | daily outbound quantity | Parsed as outbound movements when a valid month is detected |
+`movement_type` 값:
 
-### Material Inventory
+- `IN`
+- `OUT`
+- `ADJUST`
 
-| Excel column | Suggested field | Note |
-| --- | --- | --- |
-| 품명 (규격/색상) | material.name | Required; merged/blank rows inherit previous name during parsing |
-| 종류 | material.material_type | Container, cap, box, pump, etc. |
-| 현재고 | material.current_stock | Directly managed for materials |
-| 기준재고 | material.safety_stock | Shortage threshold |
-| 발주처 | material.vendor | Optional |
-| 가격(VAT미포함) | material.unit_price | Optional |
-| 비고 | material.memo | Optional |
+## 계산 로직
 
-## Import Flow
+- `현재고 = 입고 합계 - 출고 합계 + 조정 합계`
+- `월별 출고량 = 해당 월 OUT 수량 합계`
+- `최근 3개월 월 평균 출고량 = 최근 3개월 OUT 합계 / 3`
+- `평균 대비 재고수량 = 현재고 - 최근 3개월 월 평균 출고량`
+- `평균 대비 재고수량 < 0` 이면 `부족`
+- `현재고 < 최근 3개월 월 평균 출고량 * 0.5` 이면 `심각 부족`
 
-1. Upload `.xlsx`.
-2. Detect sheet and column layout.
-3. Store parsed rows in `excel_import_rows` for preview.
-4. Validate duplicates before saving.
-5. User confirms selected rows.
-6. Persist products, stock movements, and materials.
+## API
 
-Product codes are business identifiers and may change. The stable internal key is `products.id`, and code changes are recorded in `product_code_histories`.
+- `GET /health`
+- `GET /api/products`
+- `POST /api/products`
+- `GET /api/inventory/summary`
+- `POST /api/stock-movements`
+- `GET /api/reports/monthly-outbound?year=2026&month=6`
+- `GET /api/reports/monthly-outbound-trend?year=2026&month=6&months=12`
+- `GET /api/reports/shortage`
+- `POST /api/uploads/monthly-preview?year=2026&month=6`
+- `POST /api/uploads/monthly-commit`
+- `GET /api/monthly-records?year=2026&month=6`
+- `DELETE /api/monthly-records?year=2026&month=6`
 
-## Monthly Upload Columns
+## 화면
 
-Required columns in the external monthly upload file:
+- `/inventory`
+  - 제품명
+  - 현재고
+  - 이번 달 출고량
+  - 최근 3개월 월 평균 출고량
+  - 평균 대비 재고수량
+  - 부족 상태
+  - 생산주문 필요 여부
 
-| Excel column | Suggested field |
-| --- | --- |
-| 회사명 | preview.company_name |
-| 상품코드 | products.product_code |
-| 공급사 | preview.supplier |
-| 상품명 | products.external_code + products.name |
-| 바코드 | products.barcode |
-| 구분 | preview.item_type |
-| 현재고 | inventory_snapshots.current_stock |
-| 금월 마감재고 | inventory_snapshots.closing_stock_current_month |
-| 전월 마감재고 | inventory_snapshots.closing_stock_previous_month |
-| 마감재고 증감 | inventory_snapshots.stock_change |
-| 입고 | inventory_snapshots.inbound_quantity |
-| 창고 내 입고 | inventory_snapshots.warehouse_inbound_quantity |
-| 반품 입고 | inventory_snapshots.return_inbound_quantity |
-| 출고 | inventory_snapshots.outbound_quantity |
-| 반출 | inventory_snapshots.carryout_quantity |
-| 회송 | inventory_snapshots.return_outbound_quantity |
-| 재고조정 입고 | inventory_snapshots.adjustment_inbound_quantity |
-| 재고조정 반출 | inventory_snapshots.adjustment_outbound_quantity |
-| 증감 | inventory_snapshots.net_change |
+- `/movements`
+  - 날짜
+  - 제품 선택
+  - 입고/출고/실재고 조정
+  - 수량 입력
+  - 저장
 
-`상품명` can include an external code prefix, for example `DEEP200 / 딥 리페어링 헤어 마스크(200ml)`. The parser should split this into:
+- `/reports/monthly`
+  - 월 선택
+  - 해당 월 xlsx 업로드
+  - 업로드 미리보기
+  - 전체 선택 / 전체 해제
+  - 월 데이터 리셋
+  - 제품별 월 출고량
+  - 최근 12개월 출고 추이
 
-- `external_code`: `DEEP200`
-- `name`: `딥 리페어링 헤어 마스크(200ml)`
+- `/reports/shortage`
+  - 부족 제품만 표시
+  - 빨간불 표시
+  - 생산주문 필요 제품 확인
 
-## Matching Policy
+## 참고
 
-1. Match by `product_code`.
-2. Match by `barcode`.
-3. Match by normalized/fuzzy product name.
+- 예전 데이터에 `inbound`, `outbound`, `adjustment` 같은 값이 남아 있어도 서비스 레이어에서 `IN`, `OUT`, `ADJUST`로 흡수하도록 처리했습니다.
+- 월별 업로드를 반영하면 해당 월의 제품별 `OUT` movement도 함께 생성되어 최근 3개월 평균과 재고현황에 바로 반영됩니다.
+- 같은 월 데이터를 다시 반영할 때는 해당 월 업로드로 생성된 movement를 교체합니다.
+- 같은 달에 이미 일일 `OUT` 입력을 많이 해둔 상태에서 같은 달 월업로드를 다시 반영하면 해석이 겹칠 수 있으니, 운영상으로는 마감된 월 통계 업로드에 우선 사용하는 편이 안전합니다.
+- 현재 회사 제품은 약 127개로 보고 있으며, `product_code`는 현재 사용하는 신코드, `legacy_code`는 예전 코드로 분리해 관리합니다.
+- 엑셀에서 제품명이 `DEEP200 / 딥 리페어링 헤어 마스크(200ml)` 형태라면 `legacy_code=DEEP200`, `name=딥 리페어링 헤어 마스크(200ml)`로 자동 분리합니다.
+- 신제품처럼 구코드가 없는 경우에는 `legacy_code`를 비워둡니다.
+- 제품 식별의 기준은 내부 `id`이고, 신코드/구코드는 업무상 참조 코드로 취급하는 방향이 맞습니다.
 
-Unmatched rows stay in preview and can be committed as new products after user confirmation.
+## 제품 일괄 등록
 
-## Duplicate And Rollback Policy
+월별 입출고 통계 파일 기준으로 제품 127건을 일괄 등록할 수 있습니다.
 
-- Upload preview never writes inventory data.
-- Commit creates an `upload_batches` row and stores all derived `inventory_snapshots` and `stock_movements` with `upload_batch_id`.
-- If the same `year/month/source` already has a committed upload, the frontend must ask whether to replace it.
-- Replacement should mark the old batch as `rolled_back` and remove or supersede its snapshots/movements in one transaction.
-- Raw invalid rows are stored in `upload_errors.raw_data` as JSON when commit fails or validation detects row-level errors.
+```bash
+cd inventory-management
+python3 backend/scripts/import_products_from_monthly_xlsx.py "/path/to/monthly-inventory.xlsx"
+```
+
+등록 기준:
+
+- `상품코드` -> `product_code`
+- `상품명` 앞 코드 prefix -> `legacy_code`
+- `상품명` 본문 -> `name`
+- `바코드` -> `barcode`
+- `현재고`는 등록 대상 필터 판단에 사용
+
+현재 규칙:
+
+- 같은 `legacy_code`를 공유하는 제품이 여러 개 있을 때
+- 그중 `현재고 > 0`인 제품이 하나라도 있으면
+- 같은 구코드 묶음 안에서 `현재고 = 0`인 제품은 이번 등록 대상에서 제외합니다.
+
+예:
+
+- `ORG500` 그룹에서 재고 있는 코드가 있으면
+- 재고 0인 `ORG500` 코드는 비사용 코드로 보고 이번 제품 등록에서 제외
+
+이미 제품이 있는 경우에는 다음 우선순위로 기존 레코드를 찾아 업데이트합니다.
+
+1. 신코드 일치
+2. 구코드 일치
+3. 기존 `product_code`가 구코드와 일치
+4. 바코드 일치
+5. 제품명 일치
